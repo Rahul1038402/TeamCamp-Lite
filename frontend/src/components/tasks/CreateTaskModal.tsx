@@ -1,0 +1,226 @@
+import { useState } from 'react';
+import type { FormEvent } from 'react';
+import Modal from '../common/Modal';
+import type { ProjectMember } from '../../types';
+
+interface CreateTaskModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  projectId: number;
+  members: ProjectMember[];
+  onTaskCreated: () => void;
+}
+
+export default function CreateTaskModal({ 
+  isOpen, 
+  onClose, 
+  projectId, 
+  members,
+  onTaskCreated 
+}: CreateTaskModalProps) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const [formData, setFormData] = useState({
+    title: '',
+    description: '',
+    status: 'todo' as 'todo' | 'in_progress' | 'done',
+    assigned_to: '',
+    due_date: '',
+    priority: 'medium' as 'low' | 'medium' | 'high',
+  });
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    setError('');
+
+    if (!formData.title.trim()) {
+      setError('Task title is required');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      // Import at component level to avoid circular deps
+      const { tasksAPI } = await import('../../services/api');
+      
+      await tasksAPI.create(projectId, {
+        title: formData.title.trim(),
+        description: formData.description.trim() || null,
+        status: formData.status,
+        assigned_to: formData.assigned_to || null,
+        due_date: formData.due_date || null,
+        priority: formData.priority,
+      });
+
+      // Reset form
+      setFormData({
+        title: '',
+        description: '',
+        status: 'todo',
+        assigned_to: '',
+        due_date: '',
+        priority: 'medium',
+      });
+      
+      onTaskCreated();
+      onClose();
+    } catch (err: any) {
+      setError(err.message || 'Failed to create task');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleClose = () => {
+    if (!loading) {
+      setFormData({
+        title: '',
+        description: '',
+        status: 'todo',
+        assigned_to: '',
+        due_date: '',
+        priority: 'medium',
+      });
+      setError('');
+      onClose();
+    }
+  };
+
+  return (
+    <Modal isOpen={isOpen} onClose={handleClose} title="Create New Task">
+      <div className="rounded-lg p-6 w-full max-w-lg">
+        {/* Error Message */}
+        {error && (
+          <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">
+            {error}
+          </div>
+        )}
+
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Task Title */}
+          <div>
+            <label className="block text-sm font-medium text-text-primary mb-2">
+              Task Title <span className="text-red-400">*</span>
+            </label>
+            <input
+              type="text"
+              value={formData.title}
+              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+              placeholder="Enter task title"
+              className="w-full px-4 py-2 bg-background-secondary border border-border rounded-lg text-text-primary placeholder-text-tertiary focus:outline-none focus:ring-2 focus:ring-primary"
+              disabled={loading}
+              autoFocus
+            />
+          </div>
+
+          {/* Description */}
+          <div>
+            <label className="block text-sm font-medium text-text-primary mb-2">
+              Description
+            </label>
+            <textarea
+              value={formData.description}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              placeholder="Add task description"
+              rows={3}
+              className="w-full px-4 py-2 bg-background-secondary border border-border rounded-lg text-text-primary placeholder-text-tertiary focus:outline-none focus:ring-2 focus:ring-primary resize-none"
+              disabled={loading}
+            />
+          </div>
+
+          {/* Status and Priority */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-text-primary mb-2">
+                Status
+              </label>
+              <select
+                value={formData.status}
+                onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
+                className="w-full px-4 py-2 bg-background-secondary border border-border rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary"
+                disabled={loading}
+              >
+                <option value="todo">To Do</option>
+                <option value="in_progress">In Progress</option>
+                <option value="done">Done</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-text-primary mb-2">
+                Priority
+              </label>
+              <select
+                value={formData.priority}
+                onChange={(e) => setFormData({ ...formData, priority: e.target.value as any })}
+                className="w-full px-4 py-2 bg-background-secondary border border-border rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary"
+                disabled={loading}
+              >
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Assign To and Due Date */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-text-primary mb-2">
+                Assign To
+              </label>
+              <select
+                value={formData.assigned_to}
+                onChange={(e) => setFormData({ ...formData, assigned_to: e.target.value })}
+                className="w-full px-4 py-2 bg-background-secondary border border-border rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary"
+                disabled={loading}
+              >
+                <option value="">Unassigned</option>
+                {members.map((member) => (
+                  <option key={member.user_id} value={member.user_id}>
+                    {member.user?.email || 'Unknown'}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-text-primary mb-2">
+                Due Date
+              </label>
+              <input
+                type="date"
+                value={formData.due_date}
+                onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
+                className="w-full px-4 py-2 bg-background-secondary border border-border rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary"
+                disabled={loading}
+              />
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="flex items-center gap-3 pt-4">
+            <button
+              type="button"
+              onClick={handleClose}
+              disabled={loading}
+              className="flex-1 px-4 py-2 bg-background-secondary border border-border rounded-lg text-text-primary hover:bg-surface transition-colors disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? 'Creating...' : 'Create Task'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </Modal>
+  );
+}
